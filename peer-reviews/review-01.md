@@ -22,3 +22,4 @@
 ## 相手のリポジトリに書いたIssueのURL
 
 
+https://github.com/25cm0107WangJinqiao/swift-textbook-template/issues/1
