@@ -177,62 +177,82 @@ struct SettingsView: View {
 
 ### SwiftDataモデル（@Model）
 
-```swift
-// 該当部分のコードを抜粋して貼る
-```
+@Model
+class Memo {
+    var title: String
+    var content: String
+    var createdAt: Date
+    var isFavorite: Bool
 
-**何をしているか：**
-（この部分が果たしている役割を説明する）
+    init(title: String, content: String, createdAt: Date = .now, isFavorite: Bool = false) {
+        self.title = title
+        self.content = content
+        self.createdAt = createdAt
+        self.isFavorite = isFavorite
+    }
+}
+何をしているか：
 
-**なぜこう書くのか：**
-（別の書き方ではなく、この書き方が選ばれている理由を説明する）
+@Modelマクロを付けることで、通常のSwiftクラスをSwiftDataが管理する永続化オブジェクトとして登録している。title・content・createdAt・isFavoriteの各プロパティは、そのまま内部ストア（SQLiteベース）に保存されるカラムに対応する。initでcreatedAtとisFavoriteにデフォルト値を持たせているため、呼び出し側はtitleとcontentだけ渡せばインスタンスを作れる。
+なぜこう書くのか：
 
-**もしこう書かなかったら：**
-（この部分を省略したり変えたりすると何が起きるか。実際に試した結果があればここに書く）
+@Modelはクラス（参照型）に適用する設計になっている。SwiftDataが変更を追跡して自動保存するには、プロパティの変化がオブジェクト全体で共有される参照型である必要があるため、structではなくclassで定義している。デフォルト値を持たせるのは、メモ追加時のコードを簡潔にし、作成日時を毎回明示的に渡す必要をなくすため。
+もしこう書かなかったら：
 
+@Modelを外して通常のclassにすると、@Queryでの取得やmodelContext.insert/deleteの対象にできずビルドエラーになる。structとして定義すると@Modelマクロ自体が適用できず、これもビルドエラーになる。
 ---
 
 ### データの追加・削除（modelContext）
 
-```swift
-// 該当部分のコードを抜粋して貼る
-```
+// 追加（MemoAddView）
+modelContext.insert(Memo(title: title, content: content))
+dismiss()
 
-**何をしているか：**
+// 削除（ContentView）
+func deleteMemos(at offsets: IndexSet) {
+    for index in offsets {
+        modelContext.delete(displayedMemos[index])
+    }
+}
 
-**なぜこう書くのか：**
+何をしているか：
 
-**もしこう書かなかったら：**
+@Environment(\.modelContext)で取得したmodelContextは、SwiftDataの永続化ストアへの窓口となるオブジェクト。insert()で新しいMemoをストアに登録し、delete()で指定したMemoをストアから削除している。明示的にsave()を呼ばなくても、SwiftUIとの連携によって変更が自動的にディスクへ反映される。
+なぜこう書くのか：
 
----
+データの操作をmodelContextに集約することで、@Queryが監視しているデータと表示が常に同期する。自前で配列を@Stateとして持って操作すると、画面表示とディスク上のデータがずれてしまう可能性があるため、SwiftData側に「単一の真実の源」を任せる設計になっている。
+もしこう書かなかったら：
+
+modelContextを経由せず配列を直接操作すると、見た目上はリストが変わったように見えても永続化ストアには反映されず、アプリを再起動するとデータが元に戻ってしまう。
 
 ### @Queryによるデータ取得
 
-```swift
-// 該当部分のコードを抜粋して貼る
-```
+@Query(sort: \Memo.createdAt, order: .reverse) private var memos: [Memo]
 
-**何をしているか：**
+何をしているか：
 
-**なぜこう書くのか：**
+@QueryはSwiftDataのストアからMemoを全件取得し、createdAtの降順（新しい順）で並べた配列をmemosに自動的にバインドする。ストア内のデータが変化すると自動的に検知され、memosの内容とView全体が再描画される。
+なぜこう書くのか：
 
-**もしこう書かなかったら：**
+キーパスで並び替え条件を指定するだけで宣言的にソートが行え、データ変更時の再フェッチ処理を自分で書く必要がない。これによりContentView側のデータ管理コードを大幅に削減できる。
+もしこう書かなかったら：
 
----
-
+@Queryを使わず自前でfetchするコードを書くと、データが変わるたびに明示的な再取得と@State更新が必要になり、更新漏れによる表示崩れのリスクが生まれる。
 ### @AppStorageによる設定保存
 
-```swift
-// 該当部分のコードを抜粋して貼る
-```
+@AppStorage("sortByFavorite") private var sortByFavorite: Bool = false
+@AppStorage("userName") private var userName: String = ""
 
-**何をしているか：**
+何をしているか：
 
-**なぜこう書くのか：**
+@AppStorageは指定したキーを使って内部的にUserDefaultsへ値を読み書きするプロパティラッパー。値の変更が自動的にUserDefaultsに保存され、アプリ再起動後も復元される。
+なぜこう書くのか：
 
-**もしこう書かなかったら：**
+ユーザー名や表示設定のような軽量な値はSwiftDataの構造化データベースに保存するには大げさで、UserDefaultsをラップした@AppStorageの方が適している。宣言するだけで読み書きと永続化が自動化される。
+もしこう書かなかったら：
 
----
+通常の@Stateで宣言すると、アプリを終了して再起動した際に値が初期値にリセットされ、保存した設定が毎回失われてしまう。
+
 
 （必要に応じてセクションを増やす）
 
@@ -240,37 +260,50 @@ struct SettingsView: View {
 
 | 項目 | 説明 | 使用例 |
 |------|------|--------|
-| 例：`@Model` | SwiftDataでオブジェクトを永続化するためのマクロ | `@Model final class Memo { ... }` |
-| 例：`@Query` | データベースからデータを取得し、変更を自動で反映するプロパティラッパー | `@Query var memos: [Memo]` |
-| | | |
-| | | |
-| | | |
+|@AppStorage |UserDefaultsと自動的に同期するプロパティラッパー | @AppStorage("userName") var userName: String = ""|
+|modelContext |SwiftDataストアへのデータ操作の窓口となる環境値 |@Environment(\.modelContext) var modelContext |
+| @Bindable|参照型（@Model）のプロパティへ直接Bindingを作るマクロ |@Bindable var memo: Memo → TextField(..., text: $memo.title) |
 
 ## 自分の実験メモ
 
 （模範コードを改変して試したことを書く）
 
 **実験1：**
-- やったこと：
-- 結果：
-- わかったこと：
+やったこと：SettingsViewでユーザー名を「林」に変更し、アプリを終了して再起動した。
+結果：再起動後もナビゲーションタイトルが「林のメモ帳」のまま表示された。
+わかったこと：@AppStorageで保存した値はUserDefaultsに保存されるため、アプリを終了してもデータが保持されることが分かった。
 
 **実験2：**
-- やったこと：
-- 結果：
-- わかったこと：
-
+やったこと：複数のメモを作成し、一部のメモだけをお気に入りに設定して「お気に入りを上に表示」をONにした。
+結果：お気に入りに設定したメモが一覧の上部へ移動した。
+わかったこと：表示順はデータベースの保存順ではなく、displayedMemosで加工した結果を利用して変更できることが分かった。また、データ自体を変更しなくても表示方法だけを変更できることを理解した。
 ## AIに聞いて特に理解が深まった質問 TOP3
 
-1. **質問：**
-   **得られた理解：**
+1. 質問：
 
-2. **質問：**
-   **得られた理解：**
+なぜSwiftDataでは@Modelを付けたclassを使うのですか。
 
-3. **質問：**
-   **得られた理解：**
+得られた理解：
+最初はstructでも同じように保存できると思っていた。しかし、SwiftDataはオブジェクトの変更を監視するため、参照型であるclassを利用していることが分かった。また、@Modelを付けることでSwiftDataが自動的に永続化対象として認識することを理解した。
 
+2. 質問：
+
+@Queryはどのような仕組みでデータを自動更新しているのですか。
+
+得られた理解：
+最初は画面を更新するために毎回データを取得し直していると思った。しかし、@QueryはSwiftDataの変更を監視しており、データが追加・削除・編集されたときに自動的にViewを再描画していることが分かった。そのため、自分で再読み込み処理を書く必要がないことを理解した。
+
+3. 質問：
+
+@AppStorageとSwiftDataはどのように使い分けるのですか。
+
+得られた理解：
+最初はすべてSwiftDataで保存すればよいと思っていた。しかし、ユーザー名や表示設定のような単純な値は@AppStorageの方が簡単に管理できることが分かった。一方で、メモのように複数の項目を持つデータはSwiftDataで管理する方が適していることを理解した。
 ## この章のまとめ
+今回の章では、SwiftDataとAppStorageを利用してデータを永続化する方法を学んだ。
 
-（この章で学んだ最も重要なことを、未来の自分が読み返したときに役立つように書く）
+特に印象に残ったのは、SwiftDataではデータベースを直接操作するようなコードを多く書かなくても、@Modelや@Queryを利用することで簡単にデータ管理ができる点である。また、データが変更されるとSwiftUIが自動的に画面を更新するため、表示とデータの整合性を保ちやすいことも理解した。
+
+さらに、ユーザー設定のような簡単な情報は@AppStorageで保存し、メモのような構造化されたデータはSwiftDataで保存するという使い分けも学んだ。
+
+最初は「データ保存」と聞くと難しく感じていたが、SwiftUIとSwiftDataの仕組みを利用することで、少ないコードで永続化機能を実現できることが分かった。今後アプリを作る際には、保存するデータの種類に応じて適切な保存方法を選択できるようになりたい。
