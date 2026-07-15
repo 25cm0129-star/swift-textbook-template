@@ -1,62 +1,442 @@
 # 第6章：ジェスチャー操作
 
-> 執筆者：林 楽駿
+> 執筆者：林 楽駿  
 > 最終更新：2026-07-15
 
 ## この章で学ぶこと
 
-この章では、画面上で行われる指の操作を検出するジェスチャー機能について学ぶ。タップ、ロングプレス、ドラッグ、拡大縮小、回転などの基本的な操作を実装し、最後にドラッグ操作とアニメーションを組み合わせたTinder風スワイプカードUIを作成する。
+この章では、SwiftUIでユーザーの指の動きを検出するジェスチャー機能について学ぶ。タップ、ロングプレス、ドラッグ、ピンチによる拡大縮小、2本指による回転を実装し、最後に複数のジェスチャーを同時に使用する方法を確認する。
 
 ## 模範コードの全体像
 
 ```swift
-// 教員から配布された模範コード全体をここに貼り付ける
+// ============================================
+// 第6章（基本）：ジェスチャーで操作するカードアプリ
+// ============================================
+// タップ、ロングプレス、ドラッグ、ピンチ、回転の
+// 各ジェスチャーを実際に体験しながら学びます。
+// ============================================
+
+import SwiftUI
+
+// MARK: - メインビュー
+
+struct ContentView: View {
+    var body: some View {
+        NavigationStack {
+            List {
+                NavigationLink("タップ & ロングプレス") {
+                    TapDemoView()
+                }
+                NavigationLink("ドラッグ") {
+                    DragDemoView()
+                }
+                NavigationLink("ピンチ（拡大縮小）") {
+                    MagnifyDemoView()
+                }
+                NavigationLink("回転") {
+                    RotateDemoView()
+                }
+                NavigationLink("組み合わせ") {
+                    CombinedDemoView()
+                }
+            }
+            .navigationTitle("ジェスチャー体験")
+        }
+    }
+}
+
+// MARK: - タップ & ロングプレス
+
+struct TapDemoView: View {
+    @State private var tapCount = 0
+    @State private var backgroundColor: Color = .blue
+    @State private var isPressed = false
+
+    var body: some View {
+        VStack(spacing: 30) {
+            Text("タップ回数: \(tapCount)")
+                .font(.title)
+
+            // シングルタップ
+            RoundedRectangle(cornerRadius: 16)
+                .fill(backgroundColor)
+                .frame(width: 200, height: 200)
+                .overlay {
+                    Text("タップしてね")
+                        .foregroundStyle(.white)
+                        .font(.headline)
+                }
+                .onTapGesture {
+                    tapCount += 1
+                    backgroundColor = Color(
+                        hue: Double.random(in: 0...1),
+                        saturation: 0.7,
+                        brightness: 0.9
+                    )
+                }
+
+            // ロングプレス
+            Circle()
+                .fill(isPressed ? .green : .orange)
+                .frame(width: 120, height: 120)
+                .scaleEffect(isPressed ? 1.3 : 1.0)
+                .overlay {
+                    Text(isPressed ? "成功!" : "長押し")
+                        .foregroundStyle(.white)
+                        .font(.headline)
+                }
+                .animation(.spring(duration: 0.3), value: isPressed)
+                .onLongPressGesture(minimumDuration: 1.0) {
+                    isPressed = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                        isPressed = false
+                    }
+                }
+        }
+        .navigationTitle("タップ & ロングプレス")
+    }
+}
+
+// MARK: - ドラッグ
+
+struct DragDemoView: View {
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+
+    var body: some View {
+        VStack {
+            Text("カードをドラッグしてみよう")
+                .font(.headline)
+                .padding()
+
+            Spacer()
+
+            RoundedRectangle(cornerRadius: 20)
+                .fill(
+                    LinearGradient(
+                        colors: [.purple, .blue],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 200, height: 280)
+                .shadow(radius: 8)
+                .overlay {
+                    VStack {
+                        Image(systemName: "hand.draw")
+                            .font(.system(size: 40))
+                        Text("ドラッグ")
+                            .font(.title3)
+                    }
+                    .foregroundStyle(.white)
+                }
+                .offset(offset)
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            offset = CGSize(
+                                width: lastOffset.width + value.translation.width,
+                                height: lastOffset.height + value.translation.height
+                            )
+                        }
+                        .onEnded { _ in
+                            lastOffset = offset
+                        }
+                )
+
+            Spacer()
+
+            Button("リセット") {
+                withAnimation(.spring) {
+                    offset = .zero
+                    lastOffset = .zero
+                }
+            }
+            .buttonStyle(.bordered)
+            .padding()
+        }
+        .navigationTitle("ドラッグ")
+    }
+}
+
+// MARK: - ピンチ（拡大縮小）
+
+struct MagnifyDemoView: View {
+    @State private var scale: CGFloat = 1.0
+    @State private var lastScale: CGFloat = 1.0
+
+    var body: some View {
+        VStack {
+            Text("ピンチで拡大縮小")
+                .font(.headline)
+                .padding()
+
+            Text(String(format: "倍率: %.1fx", scale))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Image(systemName: "star.fill")
+                .font(.system(size: 100))
+                .foregroundStyle(.yellow)
+                // タッチ判定を300×300の透明な領域に広げる
+                .frame(width: 300, height: 300)
+                .contentShape(Rectangle())
+                .scaleEffect(scale)
+                .gesture(
+                    MagnifyGesture()
+                        .onChanged { value in
+                            scale = lastScale * value.magnification
+                        }
+                        .onEnded { _ in
+                            lastScale = scale
+                        }
+                )
+
+            Spacer()
+
+            Button("リセット") {
+                withAnimation(.spring) {
+                    scale = 1.0
+                    lastScale = 1.0
+                }
+            }
+            .buttonStyle(.bordered)
+            .padding()
+        }
+        .navigationTitle("ピンチ")
+    }
+}
+
+// MARK: - 回転
+
+struct RotateDemoView: View {
+    @State private var angle: Angle = .zero
+    @State private var lastAngle: Angle = .zero
+
+    var body: some View {
+        VStack {
+            Text("2本指で回転")
+                .font(.headline)
+                .padding()
+
+            Text(String(format: "角度: %.0f°", angle.degrees))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Image(systemName: "arrow.up")
+                .font(.system(size: 80))
+                .foregroundStyle(.red)
+                // タッチ判定を300×300の透明な領域に広げる
+                .frame(width: 300, height: 300)
+                .contentShape(Rectangle())
+                .rotationEffect(angle)
+                .gesture(
+                    RotateGesture()
+                        .onChanged { value in
+                            angle = lastAngle + value.rotation
+                        }
+                        .onEnded { _ in
+                            lastAngle = angle
+                        }
+                )
+
+            Spacer()
+
+            Button("リセット") {
+                withAnimation(.spring) {
+                    angle = .zero
+                    lastAngle = .zero
+                }
+            }
+            .buttonStyle(.bordered)
+            .padding()
+        }
+        .navigationTitle("回転")
+    }
+}
+
+// MARK: - 組み合わせ
+
+struct CombinedDemoView: View {
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+    @State private var scale: CGFloat = 1.0
+    @State private var lastScale: CGFloat = 1.0
+    @State private var angle: Angle = .zero
+    @State private var lastAngle: Angle = .zero
+
+    var body: some View {
+        VStack {
+            Text("ドラッグ・ピンチ・回転を同時に")
+                .font(.headline)
+                .padding()
+
+            Spacer()
+
+            Image(systemName: "photo.artframe")
+                .font(.system(size: 120))
+                .foregroundStyle(.indigo)
+                // タッチ判定を300×300の透明な領域に広げる
+                .frame(width: 300, height: 300)
+                .contentShape(Rectangle())
+                .scaleEffect(scale)
+                .rotationEffect(angle)
+                .offset(offset)
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            offset = CGSize(
+                                width: lastOffset.width + value.translation.width,
+                                height: lastOffset.height + value.translation.height
+                            )
+                        }
+                        .onEnded { _ in
+                            lastOffset = offset
+                        }
+                )
+                // 複数のジェスチャーを「同時に」効かせるには
+                // .gesture を重ねるのではなく .simultaneousGesture を使う
+                .simultaneousGesture(
+                    MagnifyGesture()
+                        .onChanged { value in
+                            scale = lastScale * value.magnification
+                        }
+                        .onEnded { _ in
+                            lastScale = scale
+                        }
+                )
+                .simultaneousGesture(
+                    RotateGesture()
+                        .onChanged { value in
+                            angle = lastAngle + value.rotation
+                        }
+                        .onEnded { _ in
+                            lastAngle = angle
+                        }
+                )
+
+            Spacer()
+
+            Button("リセット") {
+                withAnimation(.spring) {
+                    offset = .zero
+                    lastOffset = .zero
+                    scale = 1.0
+                    lastScale = 1.0
+                    angle = .zero
+                    lastAngle = .zero
+                }
+            }
+            .buttonStyle(.bordered)
+            .padding()
+        }
+        .navigationTitle("組み合わせ")
+    }
+}
+
+#Preview {
+    ContentView()
+}
 ```
 
 **このアプリは何をするものか：**
 
-このアプリは、SwiftUIでさまざまなジェスチャー操作を確認するためのアプリである。
+このアプリは、SwiftUIで使用できる基本的なジェスチャーを実際に操作しながら確認するためのアプリである。
 
-画面上の図形やカードに対して、タップ、長押し、ドラッグ、ピンチ操作、回転操作などを行うことができる。また、最後の応用例では、動物のカードを左右にスワイプして、好きな動物と好きではない動物に分類できる。
+最初の画面には「タップ & ロングプレス」「ドラッグ」「ピンチ（拡大縮小）」「回転」「組み合わせ」の5つの項目が表示される。各項目を選択すると別の画面へ移動し、それぞれのジェスチャーを体験できる。
 
-カードを右にスワイプすると「LIKE」、左にスワイプすると「NOPE」と表示され、スワイプした方向に応じてカウントが増える。すべてのカードを分類すると「完了！」と表示され、「もう一度」ボタンで最初からやり直すことができる。
+タップ画面ではタップ回数と図形の色が変化し、長押しすると円の色・大きさ・文字が変化する。ドラッグ画面ではカードを自由に移動でき、ピンチ画面では星を拡大縮小できる。回転画面では矢印を2本指で回転できる。組み合わせ画面では、画像の移動、拡大縮小、回転を同時に行うことができる。
 
 ## コードの詳細解説
 
-### 基本ジェスチャー（タップ、ロングプレス）
+### 画面遷移
 
 ```swift
-@State private var message = "タップしてください"
-
-Text(message)
-    .padding()
-    .background(Color.blue)
-    .foregroundStyle(.white)
-    .onTapGesture {
-        message = "タップされました"
+NavigationStack {
+    List {
+        NavigationLink("タップ & ロングプレス") {
+            TapDemoView()
+        }
+        NavigationLink("ドラッグ") {
+            DragDemoView()
+        }
+        NavigationLink("ピンチ（拡大縮小）") {
+            MagnifyDemoView()
+        }
+        NavigationLink("回転") {
+            RotateDemoView()
+        }
+        NavigationLink("組み合わせ") {
+            CombinedDemoView()
+        }
     }
-    .onLongPressGesture {
-        message = "長押しされました"
-    }
+    .navigationTitle("ジェスチャー体験")
+}
 ```
 
 **何をしているか：**
 
-`onTapGesture`は、画面上の部品が1回タップされたことを検出する。タップされると、`message`の値を変更し、画面に表示される文字を更新する。
-
-`onLongPressGesture`は、一定時間指を押し続けた操作を検出する。長押しされた場合も、`message`の内容を変更する。
+`NavigationStack`の中に`List`を配置し、5種類のジェスチャーを選択できるメニュー画面を作っている。`NavigationLink`をタップすると、それぞれのデモ画面へ移動する。
 
 **なぜこう書くのか：**
 
-SwiftUIでは、ビューに対して`.onTapGesture`や`.onLongPressGesture`を追加することで、簡単にジェスチャー処理を設定できる。
-
-`message`を`@State`で宣言しているため、値が変更されるとSwiftUIが自動的に画面を再描画する。
+ジェスチャーごとに画面を分けることで、各機能の動作やコードを個別に確認しやすくなる。また、`NavigationStack`を使用すると、遷移先の画面から戻る操作も自動的に利用できる。
 
 **もしこう書かなかったら：**
 
-`onTapGesture`を書かなければ、画面をタップしても何も処理されない。
+`NavigationStack`がなければ、`NavigationLink`による画面遷移を正しく管理できない。すべての機能を1画面に置くと、表示内容が多くなり、どのジェスチャーを操作しているのか分かりにくくなる。
 
-また、`message`を通常の変数として宣言すると、値を変更しても画面表示が正しく更新されない。画面上で変化する値には`@State`が必要である。
+---
+
+### 基本ジェスチャー（タップ、ロングプレス）
+
+```swift
+@State private var tapCount = 0
+@State private var backgroundColor: Color = .blue
+@State private var isPressed = false
+```
+
+```swift
+.onTapGesture {
+    tapCount += 1
+    backgroundColor = Color(
+        hue: Double.random(in: 0...1),
+        saturation: 0.7,
+        brightness: 0.9
+    )
+}
+```
+
+```swift
+.animation(.spring(duration: 0.3), value: isPressed)
+.onLongPressGesture(minimumDuration: 1.0) {
+    isPressed = true
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+        isPressed = false
+    }
+}
+```
+
+**何をしているか：**
+
+`onTapGesture`は角丸の四角形に対するタップを検出している。タップされるたびに`tapCount`を1増やし、`Color`の色相をランダムに変更している。
+
+`onLongPressGesture`は円を1秒以上長押しした操作を検出する。長押しに成功すると`isPressed`が`true`になり、円がオレンジ色から緑色へ変わる。また、大きさが1.3倍になり、文字も「長押し」から「成功!」へ変化する。1秒後に`isPressed`を`false`へ戻して、元の状態に戻している。
+
+**なぜこう書くのか：**
+
+`tapCount`、`backgroundColor`、`isPressed`は画面の表示に影響する値なので、`@State`で管理している。`@State`の値が変化すると、SwiftUIが画面を自動的に再描画する。
+
+`minimumDuration: 1.0`を指定することで、1秒以上押した場合だけ長押しとして認識できる。`.animation(..., value: isPressed)`は、`isPressed`が変化したときだけ色や大きさの変更にアニメーションを付けるために使用している。
+
+**もしこう書かなかったら：**
+
+`@State`を使用しなければ、タップ回数や色などの変更を画面へ正しく反映できない。`minimumDuration`を短くすると、少し触っただけでも長押しとして判定されやすくなる。アニメーションを指定しなければ、円の大きさが瞬間的に切り替わる。
 
 ---
 
@@ -64,321 +444,297 @@ SwiftUIでは、ビューに対して`.onTapGesture`や`.onLongPressGesture`を�
 
 ```swift
 @State private var offset: CGSize = .zero
-
-Circle()
-    .fill(Color.blue)
-    .frame(width: 120, height: 120)
-    .offset(offset)
-    .gesture(
-        DragGesture()
-            .onChanged { value in
-                offset = value.translation
-            }
-            .onEnded { value in
-                withAnimation(.spring) {
-                    offset = .zero
-                }
-            }
-    )
+@State private var lastOffset: CGSize = .zero
 ```
 
-**何をしているか：**
-
-`DragGesture`を使って、指のドラッグ操作を検出している。
-
-ドラッグ中は、`value.translation`から指が最初の位置からどれくらい移動したかを取得し、その値を`offset`に代入している。
-
-`.offset(offset)`によって、図形の表示位置が指の動きに合わせて移動する。
-
-指を離した後は、`offset`を`.zero`に戻して、図形を元の位置に戻している。
-
-**なぜこう書くのか：**
-
-`value.translation`には横方向と縦方向の移動量が含まれているため、ドラッグした方向に図形を自然に動かすことができる。
-
-位置情報を`@State`で管理することで、ドラッグ中の値が変わるたびに画面が更新される。
-
-また、`withAnimation(.spring)`を使用することで、元の位置に戻る動きを自然なバネのようなアニメーションにできる。
-
-**もしこう書かなかったら：**
-
-`.offset(offset)`を書かなければ、ドラッグ操作は検出されても、図形は画面上で移動しない。
-
-`.onChanged`を書かなければ、指を動かしている途中の位置を取得できない。
-
-`.onEnded`で`offset`を戻さなければ、指を離した場所に図形が残る。
-
----
-
-### 拡大縮小と回転
-
 ```swift
-@State private var scale: CGFloat = 1.0
-@State private var rotation: Angle = .zero
-
-Image(systemName: "star.fill")
-    .font(.system(size: 100))
-    .foregroundStyle(.yellow)
-    .scaleEffect(scale)
-    .rotationEffect(rotation)
-    .gesture(
-        MagnificationGesture()
-            .onChanged { value in
-                scale = value
-            }
-    )
-    .simultaneousGesture(
-        RotationGesture()
-            .onChanged { value in
-                rotation = value
-            }
-    )
-```
-
-**何をしているか：**
-
-`MagnificationGesture`を使って、2本の指を広げたり縮めたりするピンチ操作を検出している。
-
-取得した値を`scale`に代入し、`.scaleEffect(scale)`で画像の大きさを変更している。
-
-`RotationGesture`は、2本の指を使った回転操作を検出する。取得した角度を`rotation`に代入し、`.rotationEffect(rotation)`で画像を回転させている。
-
-**なぜこう書くのか：**
-
-拡大率と回転角度をそれぞれ`@State`で保存することで、指の操作に合わせて画像をリアルタイムで変化させることができる。
-
-`.simultaneousGesture`を使うことで、拡大縮小ジェスチャーと回転ジェスチャーを同時に認識できる。
-
-**もしこう書かなかったら：**
-
-`.scaleEffect(scale)`を書かなければ、ピンチ操作を行っても画像の大きさは変わらない。
-
-`.rotationEffect(rotation)`を書かなければ、回転ジェスチャーを認識しても画像は回転しない。
-
-通常の`.gesture`を複数重ねるだけでは、一方のジェスチャーが優先され、拡大と回転を同時に操作できない場合がある。
-
----
-
-### ジェスチャーの組み合わせとアニメーション
-
-```swift
-@State private var offset: CGSize = .zero
-@State private var scale: CGFloat = 1.0
-@State private var rotation: Angle = .zero
-
-RoundedRectangle(cornerRadius: 20)
-    .fill(Color.orange)
-    .frame(width: 200, height: 200)
-    .offset(offset)
-    .scaleEffect(scale)
-    .rotationEffect(rotation)
-    .gesture(
-        DragGesture()
-            .onChanged { value in
-                offset = value.translation
-            }
-    )
-    .simultaneousGesture(
-        MagnificationGesture()
-            .onChanged { value in
-                scale = value
-            }
-    )
-    .simultaneousGesture(
-        RotationGesture()
-            .onChanged { value in
-                rotation = value
-            }
-    )
-```
-
-**何をしているか：**
-
-ドラッグ、拡大縮小、回転の3種類のジェスチャーを1つの図形に設定している。
-
-ドラッグすると図形が移動し、ピンチすると大きさが変わり、2本の指を回すと図形も回転する。
-
-**なぜこう書くのか：**
-
-`.simultaneousGesture`を使うと、複数のジェスチャーを同時に認識できる。
-
-それぞれの操作結果を`offset`、`scale`、`rotation`という別の状態変数で管理することで、処理内容が分かりやすくなる。
-
-**もしこう書かなかったら：**
-
-すべてのジェスチャーを通常の`.gesture`で設定すると、最後に設定したジェスチャーだけが反応したり、他のジェスチャーが認識されなかったりする場合がある。
-
-また、状態変数を分けなければ、位置、大きさ、角度を正しく管理できない。
-
----
-
-### Tinder風スワイプカード
-
-```swift
-@State private var offset: CGSize = .zero
-@State private var rotation: Double = 0
-
-private let swipeThreshold: CGFloat = 100
-
+.offset(offset)
 .gesture(
     DragGesture()
         .onChanged { value in
-            offset = value.translation
-            rotation = Double(value.translation.width / 20)
+            offset = CGSize(
+                width: lastOffset.width + value.translation.width,
+                height: lastOffset.height + value.translation.height
+            )
         }
-        .onEnded { value in
-            if value.translation.width > swipeThreshold {
-                withAnimation(.easeOut(duration: 0.3)) {
-                    offset = CGSize(width: 500, height: 0)
-                }
-
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    onSwipe(.right)
-                }
-            } else if value.translation.width < -swipeThreshold {
-                withAnimation(.easeOut(duration: 0.3)) {
-                    offset = CGSize(width: -500, height: 0)
-                }
-
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    onSwipe(.left)
-                }
-            } else {
-                withAnimation(.spring) {
-                    offset = .zero
-                    rotation = 0
-                }
-            }
+        .onEnded { _ in
+            lastOffset = offset
         }
 )
 ```
 
 **何をしているか：**
 
-カードをドラッグした距離によって、右スワイプまたは左スワイプを判定している。
+`DragGesture`でカードのドラッグ操作を検出している。ドラッグ中は、前回の操作終了時の位置である`lastOffset`に、今回のドラッグ距離である`value.translation`を加え、現在位置を`offset`に保存している。
 
-横方向の移動距離が`100`を超えた場合、スワイプが成立する。
-
-右に100ポイント以上動かすとカードが画面右側へ移動し、`onSwipe(.right)`が実行される。左に100ポイント以上動かすと画面左側へ移動し、`onSwipe(.left)`が実行される。
-
-100ポイント未満の場合は、カードが元の位置に戻る。
+指を離したときは、現在の`offset`を`lastOffset`へ保存する。そのため、次にドラッグするときは前回の位置から続けて移動できる。
 
 **なぜこう書くのか：**
 
-少し触っただけでカードが削除されないように、`swipeThreshold`という基準値を設定している。
-
-また、横方向の移動量を20で割って回転角度にすることで、カードがドラッグ方向に少し傾き、Tinderのような自然な動きになる。
-
-カードが画面外へ移動するアニメーションが終わってからデータを削除するため、`DispatchQueue.main.asyncAfter`を使って0.3秒後に`onSwipe`を実行している。
+`value.translation`は、今回のドラッグを開始した位置からの移動量である。前回の位置を加えないと、ドラッグを始めるたびに最初の位置を基準として計算される。`lastOffset`を使用することで、複数回のドラッグ操作を連続して反映できる。
 
 **もしこう書かなかったら：**
 
-`swipeThreshold`がなければ、少しカードを動かしただけでもスワイプが成立してしまう。
-
-`DispatchQueue.main.asyncAfter`を使わず、すぐにカードを削除すると、画面外へ移動するアニメーションが表示される前にカードが消える。
-
-`rotation`を変更しなければ、カードは傾かず、横方向に平行移動するだけになる。
+`lastOffset`を使わずに`offset = value.translation`だけを書くと、2回目以降のドラッグで位置が急に変わる場合がある。また、`.offset(offset)`を書かなければ、ドラッグ操作を検出してもカードは画面上で移動しない。
 
 ---
 
-### カード背景と透明度
+### ドラッグ位置のリセット
 
 ```swift
-RoundedRectangle(cornerRadius: 20)
-    .fill(animal.color.opacity(0.15))
-    .overlay(
-        RoundedRectangle(cornerRadius: 20)
-            .stroke(animal.color.opacity(0.3), lineWidth: 2)
-    )
+Button("リセット") {
+    withAnimation(.spring) {
+        offset = .zero
+        lastOffset = .zero
+    }
+}
 ```
 
 **何をしているか：**
 
-角が丸い長方形をカードの背景として表示している。
-
-`.fill(animal.color.opacity(0.15))`では、動物ごとに設定された色を透明度15％で背景に使用している。
-
-`.stroke(animal.color.opacity(0.3), lineWidth: 2)`では、透明度30％、太さ2ポイントの枠線を表示している。
+「リセット」ボタンを押すと、現在位置の`offset`と、保存されている前回位置の`lastOffset`を`.zero`に戻している。
 
 **なぜこう書くのか：**
 
-背景色の透明度を低くすることで、文字や絵文字が読みやすくなり、柔らかいデザインになる。
-
-背景と同じ色を枠線にも使うことで、カード全体の色を統一できる。
+2つの変数を両方リセットすることで、カードの表示位置だけでなく、次回ドラッグ時の基準位置も初期状態に戻せる。`withAnimation(.spring)`を使うことで、カードが元の位置へ滑らかに戻る。
 
 **もしこう書かなかったら：**
 
-`opacity(0.15)`を`1.0`にすると、背景色が濃くなり、文字が見づらくなる場合がある。
+`offset`だけをリセットして`lastOffset`を戻さない場合、次にドラッグしたときに以前の位置情報が加算され、カードが急に移動する可能性がある。
 
-逆に`opacity(0.0)`にすると、背景色が完全に透明になる。
+---
 
-`.overlay`を省略すると、カードの外側の枠線が表示されなくなる。
+### ピンチによる拡大縮小
+
+```swift
+@State private var scale: CGFloat = 1.0
+@State private var lastScale: CGFloat = 1.0
+```
+
+```swift
+.frame(width: 300, height: 300)
+.contentShape(Rectangle())
+.scaleEffect(scale)
+.gesture(
+    MagnifyGesture()
+        .onChanged { value in
+            scale = lastScale * value.magnification
+        }
+        .onEnded { _ in
+            lastScale = scale
+        }
+)
+```
+
+**何をしているか：**
+
+`MagnifyGesture`で2本指のピンチ操作を検出し、星の画像を拡大縮小している。`value.magnification`は現在のピンチ倍率を表し、前回の倍率`lastScale`と掛け合わせた値を`scale`へ保存している。
+
+操作終了時には現在の倍率を`lastScale`へ保存するため、次のピンチ操作でも現在の大きさから続けて拡大縮小できる。
+
+**なぜこう書くのか：**
+
+`value.magnification`は、1回のピンチ操作を開始した時点を1.0として変化する。そのため、前回の倍率を掛け合わせる必要がある。
+
+`.frame(width: 300, height: 300)`と`.contentShape(Rectangle())`を使用することで、星そのものだけでなく、周囲の透明な300×300の領域でもピンチ操作を認識できる。
+
+**もしこう書かなかったら：**
+
+`lastScale`を使用しない場合、ピンチ操作を始めるたびに倍率の基準が1.0へ戻り、画像の大きさが不自然に変化する可能性がある。`contentShape`がなければ、星の表示部分だけが操作対象となり、2本指で触りにくくなる。
+
+---
+
+### 2本指による回転
+
+```swift
+@State private var angle: Angle = .zero
+@State private var lastAngle: Angle = .zero
+```
+
+```swift
+.frame(width: 300, height: 300)
+.contentShape(Rectangle())
+.rotationEffect(angle)
+.gesture(
+    RotateGesture()
+        .onChanged { value in
+            angle = lastAngle + value.rotation
+        }
+        .onEnded { _ in
+            lastAngle = angle
+        }
+)
+```
+
+**何をしているか：**
+
+`RotateGesture`で2本指の回転操作を検出している。今回の回転量である`value.rotation`を、前回までの角度`lastAngle`に加え、現在の角度を`angle`へ保存している。
+
+`.rotationEffect(angle)`によって、保存された角度に合わせて矢印を回転させている。操作終了時には現在角度を`lastAngle`へ保存する。
+
+**なぜこう書くのか：**
+
+回転操作を複数回行っても、前回の角度から続けて回転できるようにするためである。`Angle`型を使用すると、SwiftUIの`.rotationEffect`へそのまま値を渡せる。
+
+**もしこう書かなかったら：**
+
+`lastAngle`を使用しない場合、次の回転操作を開始するときに角度の基準がゼロへ戻り、矢印が急に別の角度へ変化する可能性がある。`.rotationEffect(angle)`がなければ、角度の値が変化しても画面上の矢印は回転しない。
+
+---
+
+### ジェスチャーの組み合わせ
+
+```swift
+.scaleEffect(scale)
+.rotationEffect(angle)
+.offset(offset)
+.gesture(
+    DragGesture()
+        .onChanged { value in
+            offset = CGSize(
+                width: lastOffset.width + value.translation.width,
+                height: lastOffset.height + value.translation.height
+            )
+        }
+        .onEnded { _ in
+            lastOffset = offset
+        }
+)
+.simultaneousGesture(
+    MagnifyGesture()
+        .onChanged { value in
+            scale = lastScale * value.magnification
+        }
+        .onEnded { _ in
+            lastScale = scale
+        }
+)
+.simultaneousGesture(
+    RotateGesture()
+        .onChanged { value in
+            angle = lastAngle + value.rotation
+        }
+        .onEnded { _ in
+            lastAngle = angle
+        }
+)
+```
+
+**何をしているか：**
+
+1つの画像に、ドラッグ、ピンチによる拡大縮小、2本指による回転の3種類のジェスチャーを設定している。画像は移動しながら拡大縮小でき、同時に回転させることもできる。
+
+**なぜこう書くのか：**
+
+最初のドラッグ操作は`.gesture`で設定し、残りの拡大縮小と回転は`.simultaneousGesture`で追加している。`.simultaneousGesture`を使用すると、複数のジェスチャーを同時に認識できる。
+
+それぞれの状態を`offset`、`scale`、`angle`に分けて管理することで、位置、大きさ、角度を独立して変更できる。
+
+**もしこう書かなかったら：**
+
+複数の`.gesture`をそのまま重ねると、ジェスチャー同士が競合し、一部の操作が反応しない場合がある。`.simultaneousGesture`を使わなければ、ピンチしながら回転するような操作が難しくなる。
+
+---
+
+### 組み合わせ画面のリセット
+
+```swift
+Button("リセット") {
+    withAnimation(.spring) {
+        offset = .zero
+        lastOffset = .zero
+        scale = 1.0
+        lastScale = 1.0
+        angle = .zero
+        lastAngle = .zero
+    }
+}
+```
+
+**何をしているか：**
+
+画像の位置、倍率、角度と、それぞれの前回値をすべて初期状態へ戻している。
+
+**なぜこう書くのか：**
+
+現在値だけでなく、次の操作の基準となる`lastOffset`、`lastScale`、`lastAngle`も同時に初期化する必要がある。これにより、リセット後のジェスチャー操作を正常に開始できる。
+
+**もしこう書かなかったら：**
+
+前回値をリセットしない場合、表示上は初期状態に戻っていても、次の操作時に以前の位置、倍率、角度が加算され、画像が急に変化する可能性がある。
 
 ## 新しく学んだSwiftの文法・API
 
-| 項目                              | 説明                   | 使用例                                                  |
-| ------------------------------- | -------------------- | ---------------------------------------------------- |
-| `onTapGesture`                  | ビューがタップされたことを検出する    | `.onTapGesture { count += 1 }`                       |
-| `onLongPressGesture`            | ビューが長押しされたことを検出する    | `.onLongPressGesture { message = "長押し" }`            |
-| `DragGesture`                   | 指によるドラッグ操作を検出する      | `.gesture(DragGesture().onChanged { value in ... })` |
-| `value.translation`             | ドラッグ開始位置からの移動量を取得する  | `offset = value.translation`                         |
-| `MagnificationGesture`          | ピンチ操作による拡大・縮小を検出する   | `.gesture(MagnificationGesture())`                   |
-| `RotationGesture`               | 2本指による回転操作を検出する      | `.gesture(RotationGesture())`                        |
-| `simultaneousGesture`           | 複数のジェスチャーを同時に認識する    | `.simultaneousGesture(RotationGesture())`            |
-| `offset`                        | ビューの表示位置を移動する        | `.offset(offset)`                                    |
-| `scaleEffect`                   | ビューを拡大・縮小する          | `.scaleEffect(scale)`                                |
-| `rotationEffect`                | ビューを指定した角度だけ回転する     | `.rotationEffect(rotation)`                          |
-| `withAnimation`                 | 状態の変化にアニメーションを付ける    | `withAnimation(.spring) { offset = .zero }`          |
-| `opacity`                       | ビューや色の透明度を設定する       | `.opacity(0.5)`                                      |
-| `DispatchQueue.main.asyncAfter` | 指定した時間が経過した後に処理を実行する | `.asyncAfter(deadline: .now() + 0.3)`                |
-| `reversed()`                    | 配列の表示順を逆にする          | `ForEach(animals.reversed())`                        |
-| `shuffled()`                    | 配列の順番をランダムに並べ替える     | `Animal.sampleData.shuffled()`                       |
-| `removeAll`                     | 条件に一致する要素を配列から削除する   | `animals.removeAll { $0.id == animal.id }`           |
+| 項目 | 説明 | 使用例 |
+|------|------|--------|
+| `NavigationStack` | 画面遷移を管理するためのコンテナ | `NavigationStack { List { ... } }` |
+| `NavigationLink` | タップしたときに別の画面へ移動する | `NavigationLink("ドラッグ") { DragDemoView() }` |
+| `@State` | ビュー内で変化する値を管理し、画面を更新する | `@State private var tapCount = 0` |
+| `onTapGesture` | タップ操作を検出する | `.onTapGesture { tapCount += 1 }` |
+| `onLongPressGesture` | 長押し操作を検出する | `.onLongPressGesture(minimumDuration: 1.0) { ... }` |
+| `DragGesture` | ドラッグ操作を検出する | `.gesture(DragGesture())` |
+| `value.translation` | ドラッグ開始位置からの移動量を取得する | `value.translation.width` |
+| `CGSize` | 横方向と縦方向の大きさや移動量を表す | `CGSize(width: 100, height: 50)` |
+| `.zero` | 数値やサイズなどの初期値としてゼロを表す | `offset = .zero` |
+| `MagnifyGesture` | 2本指のピンチ操作を検出する | `.gesture(MagnifyGesture())` |
+| `value.magnification` | ピンチ操作中の拡大率を取得する | `scale = lastScale * value.magnification` |
+| `RotateGesture` | 2本指の回転操作を検出する | `.gesture(RotateGesture())` |
+| `value.rotation` | 回転ジェスチャー中の角度を取得する | `angle = lastAngle + value.rotation` |
+| `Angle` | 回転角度を表す型 | `@State private var angle: Angle = .zero` |
+| `simultaneousGesture` | 複数のジェスチャーを同時に認識する | `.simultaneousGesture(MagnifyGesture())` |
+| `contentShape` | タッチ判定に使用する形を指定する | `.contentShape(Rectangle())` |
+| `offset` | ビューの表示位置を移動する | `.offset(offset)` |
+| `scaleEffect` | ビューを拡大・縮小する | `.scaleEffect(scale)` |
+| `rotationEffect` | ビューを回転させる | `.rotationEffect(angle)` |
+| `LinearGradient` | 複数の色を滑らかに変化させる | `LinearGradient(colors: [.purple, .blue], ...)` |
+| `withAnimation` | 状態の変更にアニメーションを付ける | `withAnimation(.spring) { offset = .zero }` |
+| `DispatchQueue.main.asyncAfter` | 指定時間後に処理を実行する | `.asyncAfter(deadline: .now() + 1)` |
+| `String(format:)` | 数値の表示形式を指定する | `String(format: "倍率: %.1fx", scale)` |
 
 ## 自分の実験メモ
 
-**実験1：カード背景の透明度を変更した**
+**実験1：長押し時間を変更した**
 
-* やったこと：
-  `.fill(animal.color.opacity(0.15))`の`0.15`を`0.5`に変更した。
+- やったこと：  
+  `minimumDuration: 1.0`を`2.0`に変更した。
 
-* 結果：
-  カードの背景色が濃くなり、動物ごとの色が分かりやすくなった。一方で、色によっては説明文が少し読みづらくなった。
+- 結果：  
+  円を2秒以上押し続けなければ「成功!」と表示されなくなった。
 
-* わかったこと：
-  `opacity`の値は`0.0`から`1.0`まで設定できる。値が小さいほど透明になり、値が大きいほど色が濃くなる。
+- わかったこと：  
+  `minimumDuration`の値を変更することで、長押しとして認識されるまでの時間を調整できる。
 
-**実験2：スワイプ判定距離を変更した**
+**実験2：ドラッグ後の位置を保存しないようにした**
 
-* やったこと：
-  `swipeThreshold`を`100`から`50`に変更した。
+- やったこと：  
+  `DragGesture`の`.onEnded`にある`lastOffset = offset`を一時的に削除した。
 
-* 結果：
-  少しカードを横に動かしただけで、LIKEまたはNOPEとして判定されるようになった。
+- 結果：  
+  2回目にカードをドラッグしたとき、前回の位置から自然に続けて移動できず、位置が不自然に変化した。
 
-* わかったこと：
-  しきい値が小さすぎると誤操作が増え、大きすぎるとカードを大きく動かす必要がある。操作しやすさを考えて適切な値を設定する必要がある。
+- わかったこと：  
+  複数回のジェスチャー操作を連続して反映するには、操作終了時の値を別の変数へ保存する必要がある。
 
 ## AIに聞いて特に理解が深まった質問 TOP3
 
-1. **質問：カードの透明度はどのコードで設定しているか。**
-   **得られた理解：**
-   `.fill(animal.color.opacity(0.15))`の`0.15`が背景色の透明度である。また、`.stroke(animal.color.opacity(0.3), lineWidth: 2)`の`0.3`は枠線の透明度である。
+1. **質問：なぜ`offset`と`lastOffset`の2つが必要なのか。**  
+   **得られた理解：**  
+   `offset`は現在の表示位置を表し、`lastOffset`は前回のドラッグ終了位置を保存する。2つを使うことで、前回の位置から続けてカードを動かせる。
 
-2. **質問：なぜカードをドラッグすると傾くのか。**
-   **得られた理解：**
-   `rotation = Double(value.translation.width / 20)`によって、横方向の移動距離を回転角度に変換しているためである。右に動かすと右方向に、左に動かすと左方向に傾く。
+2. **質問：なぜ`MagnifyGesture`で`lastScale * value.magnification`と書くのか。**  
+   **得られた理解：**  
+   `value.magnification`は毎回のピンチ開始時を1.0として計算されるため、前回までの倍率`lastScale`を掛ける必要がある。
 
-3. **質問：なぜ複数のジェスチャーを同時に操作できない場合があるのか。**
-   **得られた理解：**
-   `.gesture`を複数使用すると、ジェスチャー同士が競合する場合がある。`.simultaneousGesture`を使用すると、ドラッグ、拡大縮小、回転などを同時に認識できる。
+3. **質問：なぜ複数のジェスチャーに`.simultaneousGesture`を使うのか。**  
+   **得られた理解：**  
+   `.gesture`を複数重ねるとジェスチャー同士が競合する場合がある。`.simultaneousGesture`を使用すると、ドラッグ、拡大縮小、回転を同時に認識できる。
 
 ## この章のまとめ
 
-この章では、SwiftUIでタップ、長押し、ドラッグ、拡大縮小、回転などのジェスチャーを実装する方法を学んだ。
+この章では、SwiftUIでタップ、ロングプレス、ドラッグ、ピンチによる拡大縮小、2本指による回転を実装する方法を学んだ。
 
-ジェスチャーを検出するだけでなく、`@State`を使って位置、大きさ、角度などの状態を管理し、`.offset`、`.scaleEffect`、`.rotationEffect`を使って画面表示に反映することが重要である。
+ジェスチャーを検出するだけではなく、`@State`を使って位置、倍率、角度などの状態を管理し、`.offset`、`.scaleEffect`、`.rotationEffect`を使って画面表示へ反映することが重要である。
 
-また、`withAnimation`を使用すると、状態の変化を滑らかに表示できる。複数のジェスチャーを同時に使用する場合は、`.simultaneousGesture`を使う必要がある。
+また、ドラッグの`lastOffset`、拡大縮小の`lastScale`、回転の`lastAngle`のように、操作終了時の値を保存することで、次の操作を現在の状態から続けられることが分かった。
 
-Tinder風スワイプカードでは、ドラッグ距離を利用して左右の方向を判定し、しきい値を超えた場合だけカードを分類する仕組みを理解できた。今後、画像編集アプリや地図アプリなどを作る際にも、今回学んだジェスチャー操作を活用できると考える。
+複数のジェスチャーを同時に使用する場合は、`.simultaneousGesture`を使う必要がある。さらに、`.contentShape`で操作範囲を広げると、小さな画像でもジェスチャーを認識しやすくなる。今後、画像編集アプリや地図アプリなどを作成するときにも、今回学んだジェスチャー操作と状態管理を活用したい。
