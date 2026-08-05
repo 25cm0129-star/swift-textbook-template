@@ -530,9 +530,9 @@ func imagePickerControllerDidCancel(
 | ------------------------- | -------------- | ------------------------------------------ |
 | `@State`                  | 値を保存して、画面を更新する | `@State private var selectedImage: Image?` |
 | `@Binding`                | 親画面と子画面で同じ値を使う | @State private var capturedUIImage: UIImage?
-CameraView(capturedImage: $capturedUIImage)
-`@Binding var capturedImage: UIImage?`  
-parent.capturedImage = image。                                                            |
+                                                CameraView(capturedImage: $capturedUIImage)
+                                               `@Binding var capturedImage: UIImage?`  
+                                                parent.capturedImage = image。            |
 | `PhotosPicker`            | 写真ライブラリから写真を選ぶ | `PhotosPicker(selection: $selectedItem)`   |
 | `onChange`                | 値が変わったことを確認する  | `onChange(of: selectedItem)              |
 | `Task`                    | 時間がかかる処理を行う    | `Task { await loadImage(...) }`            |
