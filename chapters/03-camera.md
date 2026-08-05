@@ -543,6 +543,15 @@ parent.capturedImage = image。                                                 
 | `fullScreenCover`         | 別の画面を全画面で開く    | `.fullScreenCover(...)`                    |
 | `UIImagePickerController` | カメラを使う         | `UIImagePickerController()`                |
 | `dismiss`                 | 今の画面を閉じる       | `parent.dismiss()`                         |
+親画面で、@Stateを使って写真を保存します。
+↓
+ドルマーク（$）を付けて、CameraViewに渡します。
+↓
+子画面では、@Bindingを使って受け取ります。
+↓
+子画面で撮影した写真を保存します。
+↓
+親画面の写真も同時に更新されます。
 
 ## 自分の実験メモ
 
